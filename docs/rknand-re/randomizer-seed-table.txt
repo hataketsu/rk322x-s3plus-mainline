@@ -1,0 +1,22 @@
+# RK322x rknand NFC data-randomizer seed table
+# 128 x u16, little-endian, indexed by (page_in_block & 0x7f).
+# Recovered from vmlinux-4.4.194-rk322x @ 0xb0d6b9bc (ptr in nandc_set_seed).
+# Randomizer enabled by OR-ing 0xc0000000 into the value written to NANDC_RANDMZ_CFG.
+# This is the descrambler key needed to read vendor-written pages from mainline.
+
+576a 05e8 629d 45a3 649c 4bf0 2342 272e
+7358 4ff3 73ec 5f70 7a60 1ad8 3472 3612
+224f 0454 030e 70a5 7809 2521 48f4 5a2d
+492a 043d 7f61 3969 517a 3b42 769d 0647
+7e2a 1383 49d9 07b8 2578 4eec 4423 352f
+5b22 72b9 367b 24b6 7e8e 2318 6bd0 5519
+1783 18a7 7b6e 7602 4b7f 3648 2c53 6b99
+0c23 67cf 7e0e 4d8c 5079 209d 244a 747b
+350b 0e4d 7004 6ac3 7f3e 21f5 7a15 2379
+1517 1aba 4e77 15a1 04fa 2d61 253a 1302
+1f63 5ab3 049a 5ae8 1cd7 4a00 30c8 3247
+729c 5034 2b0e 57f2 00e4 575b 6192 38f8
+2f6a 0c14 45fc 41df 38da 7ae1 7322 62df
+5e39 0e64 6d85 5951 5937 6281 33a1 6a32
+3a5a 2bac 743a 5e74 3b2e 7ec7 4fd2 5d28
+751f 3ef8 39b1 4e49 746b 6ef6 44be 6db7

@@ -46,6 +46,10 @@ Full findings + pinouts: [`docs/hardware.md`](docs/hardware.md).
 `# CONFIG_MTD is not set` and the DT node is `status = disabled`. So Track B = enable MTD
 + Rockchip NFC + flip the DT node, then steP-nand for boot — **not** a driver-writing or
 reverse-engineering effort. Details in [`drivers/nand-rk322x/`](drivers/nand-rk322x/).
+Booting current from NAND is a separate, unsolved problem — see
+[`drivers/nand-rk322x/FINDINGS.md`](drivers/nand-rk322x/FINDINGS.md) and the
+reverse-engineering of the closed vendor FTL in [`docs/rknand-re/`](docs/rknand-re/)
+(NFC register map, BCH ECC scheme, the data-randomizer descrambler key, FTL layout).
 
 **Track A is done:** `8189es.ko` cross-built against a source KDIR pinned to the box's
 exact vermagic (`6.6.22-current-rockchip`), loads on the running 6.6 kernel, associates
