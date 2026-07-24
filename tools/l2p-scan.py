@@ -18,7 +18,8 @@ fd = os.open(dev, os.O_RDONLY)
 info = bytearray(32)
 fcntl.ioctl(fd, MEMGETINFO, info, True)
 size = struct.unpack_from("<I", info, 8)[0]
-    if size < (1<<20): size = 0x200000000
+if size < (1 << 20):
+    size = 0x200000000
 npages = size // PAGE
 sys.stderr.write(f"device {size} bytes, {npages} pages\n")
 
