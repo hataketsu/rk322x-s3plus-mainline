@@ -1,5 +1,14 @@
 # Track B — NAND boot on the current kernel
 
+> **UPDATE (finding):** this box's NAND controller is the **open Rockchip NFC**, already
+> supported by mainline. DT compatible `rockchip,rk3228-nfc` / `rockchip,rk2928-nfc`
+> matches `rockchip-nand-controller.c` of_match (`rk2928-nfc` → nfc_v6). **No
+> reverse-engineering of the closed `rknand` blob is needed** for runtime NAND access —
+> it's a kernel-config + device-tree job. See `drivers/nand-rk322x/README.md`. The
+> disassembly plan below is kept only as a fallback if the vendor on-NAND ECC/layout
+> turns out unreadable by the mainline driver.
+
+
 ## The problem in one paragraph
 
 The RK322x boot ROM can load a first-stage loader (idbloader/miniloader) from raw NAND,

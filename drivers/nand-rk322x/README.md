@@ -1,26 +1,46 @@
-# Track B — RK322x NAND controller MTD driver (WIP)
+# Track B — RK322x NAND via the mainline NFC driver (NOT reverse-engineering)
 
-Target: a mainline-style MTD driver for `nand-controller@30030000` so kernel 6.6 can use
-the onboard NAND (and ultimately boot from it via steP-nand).
+**Key finding:** this box's NAND controller is the **open Rockchip NFC**, already
+supported by mainline — no closed `rknand` blob or disassembly needed.
 
-**This is research, not a rebuild of the vendor blob** — the 4.4 `rknand.ko` is closed and
-ABI-locked (see `docs/nand-boot.md`). Work here is driven by:
+```
+DT node   : nand-controller@30030000
+compatible: "rockchip,rk3228-nfc", "rockchip,rk2928-nfc"
+mainline  : drivers/mtd/nand/raw/rockchip-nand-controller.c of_match has
+            { .compatible = "rockchip,rk2928-nfc", .data = &nfc_v6_cfg }  ✓ matches
+```
 
-1. register map recovered from disassembling the 4.4 `rknand.ko`
-   (`docs/reverse-engineering.md`),
-2. diffing the 4.4 vs 6.6 `nand-controller` device-tree node,
-3. checking whether mainline `rockchip-nand-controller.c` already covers this controller
-   variant (then it may be a DT/compatible-string job, not a new driver).
+So Track B is a **kernel-config + device-tree** job, not a driver-writing job.
 
-## Current state
+## Blockers (both config, not code)
 
-- [ ] extract + disassemble `rknand.ko`
-- [ ] recover MMIO register map @ `0x30030000`
-- [ ] decompile 4.4 `.dtb` NAND node, diff vs 6.6 live node
-- [ ] decide: mainline NFC variant vs new driver
-- [ ] read-only MTD prototype validated against a NAND dump
-- [ ] read-write + partitions
-- [ ] steP-nand boot integration (Multitool loaders)
+1. Armbian's rk322x current kernel has **`# CONFIG_MTD is not set`** — the whole MTD
+   subsystem is off, so there's nothing for a rockchip-nfc module to attach to.
+2. The DT node is **`status = disabled`**.
 
-Nothing here is loadable yet. See `docs/nand-boot.md` for the plan and the honest
-feasibility assessment.
+## Plan
+
+- [ ] Kernel config fragment (rebuild kernel — reuse the env/ cross toolchain + KDIR):
+      ```
+      CONFIG_MTD=y
+      CONFIG_MTD_BLKDEVS=y
+      CONFIG_MTD_BLOCK=y
+      CONFIG_MTD_RAW_NAND=y
+      CONFIG_MTD_NAND_ROCKCHIP=y
+      ```
+- [ ] Enable the DT node: overlay setting `nand-controller@30030000 { status = "okay"; }`
+      (node already carries reg/clocks/assigned-clocks/interrupts + a `nand@0` child;
+      may need `nand-ecc-*` tuning on the child).
+- [ ] Boot the new kernel from SD, verify `/proc/mtd` + `/dev/mtd*` + the NFC probe in
+      dmesg; dump the existing vendor NAND layout.
+- [ ] Partition/format via mainline MTD; install rootfs.
+- [ ] Boot-from-NAND: write vendor **idbloader + miniloader** (steP-nand, blobs from
+      Multitool `bsp/`) to the NAND boot area — mainline u-boot NAND support is **not**
+      required (BootROM + vendor miniloader read NAND; see `docs/nand-boot.md`).
+
+## Caveat
+
+The driver *binding* is confirmed by of_match; what's not yet proven is whether the
+vendor's **existing on-NAND ECC/layout** is readable by the mainline NFC driver (vendor
+may have used a different ECC scheme). For a **fresh** erase+write install via the
+mainline driver this is a non-issue; only reading pre-existing vendor data might mismatch.

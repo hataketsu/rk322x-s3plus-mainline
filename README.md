@@ -38,7 +38,14 @@ Full findings + pinouts: [`docs/hardware.md`](docs/hardware.md).
 | Track | Goal | Feasibility | State |
 |---|---|---|---|
 | **A — WiFi** | RTL8189ES on 6.6 | **Feasible** — out-of-tree source builds | **✅ WORKING** — `wlan0`, WPA2, DHCP, internet |
-| **B — NAND** | Boot/use NAND on 6.6 | **Hard RE** — vendor `rknand.ko` is a closed, ABI-locked blob; needs a mainline MTD driver written for the rk322x NAND controller | research |
+| **B — NAND** | Boot/use NAND on 6.6 | **No RE needed** — the NAND controller is the open Rockchip NFC (`rk2928-nfc`), already in mainline; it's a kernel-config + device-tree job | planned |
+
+**Track B update:** the box's `nand-controller@30030000` is `compatible =
+"rockchip,rk3228-nfc", "rockchip,rk2928-nfc"`, which mainline
+`rockchip-nand-controller.c` already matches. The only blockers are config: Armbian ships
+`# CONFIG_MTD is not set` and the DT node is `status = disabled`. So Track B = enable MTD
++ Rockchip NFC + flip the DT node, then steP-nand for boot — **not** a driver-writing or
+reverse-engineering effort. Details in [`drivers/nand-rk322x/`](drivers/nand-rk322x/).
 
 **Track A is done:** `8189es.ko` cross-built against a source KDIR pinned to the box's
 exact vermagic (`6.6.22-current-rockchip`), loads on the running 6.6 kernel, associates
