@@ -38,7 +38,7 @@ Full findings + pinouts: [`docs/hardware.md`](docs/hardware.md).
 | Track | Goal | Feasibility | State |
 |---|---|---|---|
 | **A — WiFi** | RTL8189ES on 6.6 | **Feasible** — out-of-tree source builds | **✅ WORKING** — `wlan0`, WPA2, DHCP, internet |
-| **B — NAND** | Boot/use NAND on 6.6 | Controller **works on mainline** (NFC `rk2928-nfc`); existing vendor `rknand` data **not readable** by mainline | probed |
+| **B — NAND** | Boot/use NAND on 6.6 | Mainline now **reads the vendor rknand data losslessly** (descramble + 40-bit ECC RE'd & verified, 0 errors). Remaining: FTL L2P → mount → boot | reading ✓ |
 
 **Track B update:** the box's `nand-controller@30030000` is `compatible =
 "rockchip,rk3228-nfc", "rockchip,rk2928-nfc"`, which mainline
