@@ -1,0 +1,10 @@
+/dts-v1/;
+/plugin/;
+/ {
+	fragment@0 {
+		target-path = "/nand-controller@30030000";
+		__overlay__ {
+			status = "okay";
+		};
+	};
+};
