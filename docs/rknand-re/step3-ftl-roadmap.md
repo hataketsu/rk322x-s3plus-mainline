@@ -57,3 +57,38 @@ OOB doesn't fully encode L2P (e.g. map lives only in dedicated map blocks). ~90 
 Step 3 is the large piece (multi-session). Route A is the fastest thing to try next and is
 verifiable end-to-end (does the reconstructed image mount?). Everything up to here —
 lossless physical reads — is done and in the repo.
+
+---
+
+## IMPORTANT alternative — the "fresh mainline" path (avoids FTL RE entirely)
+
+Everything above (steps 1–3) is about **reading the EXISTING vendor data**. If the goal is
+just *"6.x boots from NAND"* and **wiping the NAND is acceptable** (owner said a clean
+reinstall is fine), there is a lighter, more-mainline route that skips the FTL reimplement:
+
+```
+block 0..N   : Rockchip vendor idbloader + u-boot   (BootROM-format — keep/rewrite as-is)
+rest of NAND : mainline MTD + UBI/UBIFS              (fresh — no vendor FTL, no RE)
+```
+
+- **Kernel side is essentially solved:** we already proved mainline `rockchip-nand-controller`
+  drives this NFC. On a *fresh* erase there is no vendor scramble/ECC to match — the driver
+  writes and reads with its own consistent randomizer/ECC. So a mainline kernel with
+  `CONFIG_MTD + MTD_RAW_NAND + MTD_NAND_ROCKCHIP + UBI/UBIFS` + the DT node enabled can host
+  the rootfs on NAND. (No FTL, no descramble, no L2P RE needed for fresh data.)
+- **The real remaining gap is U-Boot**, not the FTL:
+  - Vendor U-Boot 2017.09 reads rknand FTL but **not** MTD/UBI → can't load a kernel from a
+    UBI partition.
+  - Mainline U-Boot reads UBI but **rk322x NAND (NFC) support in mainline U-Boot is
+    weak/absent** → can't drive this controller to read raw NAND.
+  - ⇒ The task becomes **port the NFC driver into U-Boot for rk322x** (raw NAND + UBI read),
+    a bounded MTD-in-U-Boot job — much smaller than reimplementing the closed FTL.
+
+**Recommendation:** for a *booting* box on 6.x, the fresh MTD+UBI path (kernel proven +
+U-Boot NFC port) is likely faster than the FTL-RE path. The FTL RE (steps 1–3) is still
+worthwhile for *reading existing vendor data* and as documentation, but is not on the
+critical path to a fresh NAND boot. **Decide with the owner which goal matters: keep
+existing data (→ FTL RE) vs just boot 6.x from NAND (→ fresh MTD+UBI + U-Boot port).**
+
+> Not done autonomously: erasing/writing the NAND is destructive and irreversible — hold
+> for explicit owner go-ahead before any wipe.
