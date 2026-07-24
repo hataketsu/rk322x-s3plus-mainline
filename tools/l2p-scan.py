@@ -1,58 +1,62 @@
 #!/usr/bin/env python3
-# Phase-A rknand L2P reconstruction (window-driven). Reads /dev/mtd0 in windows via
-# nanddump subprocess (python controls offsets so physical-page indices stay exact and
-# error-prone whole-device reads are avoided), decodes per-page FTL OOB metadata
-# (de-rotating mainline's sys-byte order), keeps newest version per LPN, saves the map.
-#   l2p-scan.py /dev/mtd0 /root/l2p.map [total_mb] [win_mb]
-import sys, struct, array, subprocess
-PAGE, OOB, STEPS = 8192, 744, 8
-CHUNK = PAGE + OOB
+# Phase-A rknand L2P reconstruction via MEMREADOOB ioctl (real per-page seeking; the
+# rockchip NFC driver descrambles OOB on read, so the FTL metadata is recovered directly).
+# Pass 1: scan every physical page's OOB, decode {magic,version,LPN,prevPPA} (de-rotating
+# mainline's sys-byte order), keep newest version per LPN, save the logical->physical map.
+#   l2p-scan.py /dev/mtd0 /root/l2p.map
+import sys, os, fcntl, ctypes, struct, array
+PAGE, STEPS = 8192, 8
+MEMREADOOB = 0xC00C4D04                      # _IOWR('M',4, mtd_oob_buf) on arm32 (12 bytes)
+MEMGETINFO = 0x80204d01                      # _IOR('M',1, mtd_info_user) -> get size
 DATA_MAGIC = 0xF095
-dev = sys.argv[1]
-mapfile = sys.argv[2] if len(sys.argv) > 2 else None
-TOTAL_MB = int(sys.argv[3]) if len(sys.argv) > 3 else 8192
-WIN_MB = int(sys.argv[4]) if len(sys.argv) > 4 else 16
+dev = sys.argv[1]; mapfile = sys.argv[2] if len(sys.argv) > 2 else None
 
-def sys_word(oob, step):
-    pos = (STEPS - 1) if step == 0 else (step - 1)
-    return struct.unpack_from('<I', oob, pos * 4)[0]
-def newer(a, b):
-    return ((a - b) & 0xFFFFFFFF) < 0x80000001
+class ob(ctypes.Structure):
+    _fields_ = [("start", ctypes.c_uint32), ("length", ctypes.c_uint32), ("ptr", ctypes.c_void_p)]
 
-lpn2phys = {}; counts = {}; datap = 0; total_pages = 0; readfail = 0
-for off_mb in range(0, TOTAL_MB, WIN_MB):
-    base_page = off_mb * 1024 * 1024 // PAGE
+fd = os.open(dev, os.O_RDONLY)
+info = bytearray(32)
+fcntl.ioctl(fd, MEMGETINFO, info, True)
+size = struct.unpack_from("<I", info, 8)[0]
+    if size < (1<<20): size = 0x200000000
+npages = size // PAGE
+sys.stderr.write(f"device {size} bytes, {npages} pages\n")
+
+buf = ctypes.create_string_buffer(64)
+req = ob(0, 64, ctypes.cast(buf, ctypes.c_void_p))
+def sw(o, s):
+    p = (STEPS - 1) if s == 0 else (s - 1)
+    return struct.unpack_from('<I', o, p * 4)[0]
+def newer(a, b): return ((a - b) & 0xFFFFFFFF) < 0x80000001
+
+lpn2phys = {}; counts = {}; datap = 0; err = 0
+for pg in range(npages):
+    req.start = pg * PAGE
     try:
-        r = subprocess.run(['nanddump','-o','-f','/dev/stdout','-l',str(WIN_MB*1024*1024),
-                            '-s',str(off_mb*1024*1024), dev],
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=120)
-        buf = r.stdout
-    except Exception:
-        readfail += 1; continue
-    npages = len(buf) // CHUNK
-    for i in range(npages):
-        oob = buf[i*CHUNK+PAGE : i*CHUNK+PAGE+32]
-        s0 = sys_word(oob, 0); magic = s0 & 0xFFFF
-        counts[magic] = counts.get(magic, 0) + 1
-        if magic == DATA_MAGIC:
-            datap += 1
-            ver = sys_word(oob, 1); lpn = sys_word(oob, 2)
-            cur = lpn2phys.get(lpn)
-            if cur is None or newer(ver, cur[1]):
-                lpn2phys[lpn] = (base_page + i, ver)
-    total_pages += npages
-    if off_mb % 512 == 0:
-        sys.stderr.write(f"  {off_mb}MB: {total_pages} pages, {len(lpn2phys)} LPNs, {datap} data\n")
+        fcntl.ioctl(fd, MEMREADOOB, req)
+    except OSError:
+        err += 1; continue
+    o = buf.raw[:32]
+    magic = sw(o, 0) & 0xFFFF
+    counts[magic] = counts.get(magic, 0) + 1
+    if magic == DATA_MAGIC:
+        datap += 1
+        ver = sw(o, 1); lpn = sw(o, 2)
+        cur = lpn2phys.get(lpn)
+        if cur is None or newer(ver, cur[1]):
+            lpn2phys[lpn] = (pg, ver)
+    if pg % 100000 == 0:
+        sys.stderr.write(f"  {pg}/{npages} pages, {len(lpn2phys)} LPNs, {datap} data, {err} err\n")
 
-print(f"scanned {total_pages} pages; data {datap}; distinct LPNs {len(lpn2phys)}; readfail_windows {readfail}")
+print(f"scanned {npages} pages; data {datap}; distinct LPNs {len(lpn2phys)}; ioctl_err {err}")
 print("magics:", {hex(k): v for k, v in sorted(counts.items(), key=lambda x: -x[1])[:6]})
 if lpn2phys:
     lo, hi = min(lpn2phys), max(lpn2phys)
-    print(f"LPN {lo}..{hi}; image ~{(hi+1)*8192/1e9:.2f} GB")
-    for l in (0,1,2,3,4,5):
+    print(f"LPN {lo}..{hi}; logical image ~{(hi+1)*PAGE/1e9:.2f} GB")
+    for l in range(6):
         p = lpn2phys.get(l); print(f"  LPN {l}: {'physpage '+str(p[0]) if p else 'MISSING'}")
     if mapfile:
         arr = array.array('i', [-1]) * (hi + 1)
-        for l,(p,v) in lpn2phys.items(): arr[l] = p
-        open(mapfile,'wb').write(arr.tobytes())
+        for l, (p, v) in lpn2phys.items(): arr[l] = p
+        open(mapfile, 'wb').write(arr.tobytes())
         print(f"saved map ({hi+1} entries) -> {mapfile}")
