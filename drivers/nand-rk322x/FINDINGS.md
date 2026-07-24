@@ -119,6 +119,29 @@ Note: the on-NAND vendor u-boot is byte-family-identical to Multitool's
 `U-Boot 2022.04-armbian` in the same Multitool has **no** rknand strings — i.e. there is
 no u-boot that both reads rknand NAND *and* boots the current Armbian layout.
 
+## Verdict: 6.x from NAND is not achievable on this box
+
+Confirmed by the maintainer (jock) and by our own probes: **current/6.x Armbian cannot
+boot from NAND on rk322x** — Armbian 23/24/25 are SD-only. Two independent walls, neither
+fixable by building:
+
+1. **The 6.x kernel has no rknand FTL driver** (closed blob, no source, ABI-locked to
+   4.4). Even if u-boot loaded a 6.x kernel from NAND, that kernel could not mount its own
+   rootfs off the rknand FTL. Our mainline NFC/MTD path can't substitute — it can't read
+   the vendor rknand format at all (raw = EIO, hw-ECC = garbage).
+2. **The on-NAND vendor U-Boot 2017.09 can't load the 6.x boot.scr** (serial log:
+   `read outside partition` + `Wrong image format for source`), and no newer u-boot both
+   reads rknand *and* boots current (2022.04-armbian has no rknand support).
+
+A fresh steP-nand reinstall of a 6.x image fails identically — the 2017 u-boot and the
+missing rknand driver are unchanged. The only ways to use NAND on this box:
+
+- **Legacy 4.4 image via steP-nand** → boots standalone from NAND (has rknand FTL).
+- **6.x from SD** (Track A wifi works there) → NAND unused.
+
+6.x-on-NAND would require porting the closed rknand FTL to mainline — an unsolved,
+open-ended RE effort, not a build task.
+
 ## Reproduce
 
 ```bash
