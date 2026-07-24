@@ -1,0 +1,72 @@
+U-Boot 2017.09-g4fa8fb7-dirty (May 24 2020 - 12:08:53 +0000)
+
+Model: Rockchip RK322x SoC (NAND)
+DRAM:  2 GiB
+Sysmem: init
+Relocation Offset is: 00000000
+MMC:   dwmmc@30000000: 0
+Using default environment
+
+In:    serial@11030000
+Out:   serial@11030000
+Err:   serial@11030000
+Model: Rockchip RK322x SoC (NAND)
+MMC Device 1 not found
+no mmc device at slot 1
+MMC: no card present
+mmc_init: -123, time 2
+
+Device 0: No.1 FLASH ID:2c 64 44 4b a9 0
+ECC:60
+FTL version: 5.0.53 20190107
+FtlInit 0
+Vendor: 0x2207 Rev: V1.00 Prod: rknand
+            Type: Hard Disk
+            Capacity: 7668.0 MB = 7.4 GB (15704064 x 512)
+... is now current device
+Bootdev: rknand 0
+PartType: EFI
+get part misc fail -1
+boot mode: None
+CLK: (sync kernel. arm: enter 600000 KHz, init 600000 KHz, kernel 0N/A)
+  apll 600000 KHz
+  dpll 600000 KHz
+  cpll 500000 KHz
+  gpll 594000 KHz
+  armclk 600000 KHz
+  aclk_bus 74250 KHz
+  hclk_bus 37125 KHz
+  pclk_bus 37125 KHz
+  aclk_peri 74250 KHz
+  hclk_peri 37125 KHz
+  pclk_peri 37125 KHz
+Net:   eth0: ethernet@30200000
+Hit key to stop autoboot('CTRL+C'):  0
+MMC Device 1 not found
+no mmc device at slot 1
+starting USB...
+USB0:   Core Release: 3.10a
+scanning bus 0 for devices... 1 USB Device(s) found
+       scanning usb for storage devices... 0 Storage Device(s) found
+
+Device 0: unknown device
+
+Device 0: Vendor: 0x2207 Rev: V1.00 Prod: rknand
+            Type: Hard Disk
+            Capacity: 7668.0 MB = 7.4 GB (15704064 x 512)
+... is now current device
+Scanning rknand 0:1...
+Found U-Boot script /boot/boot.scr
+fs_devread read outside partition 11452352
+## Executing script at 60000000
+Wrong image format for "source" command
+SCRIPT FAILED: continuing...
+Card did not respond to voltage select!
+mmc_init: -95, time 11
+DMA reset timeout
+missing environment variable: pxeuuid
+missing environment variable: bootfile
+Retrieving file: pxelinux.cfg/01-4e-30-d4-0f-4e-2c
+DMA reset timeout
+missing environment variable: bootfile
+Retrieving file: pxelinux.cfg/00000000

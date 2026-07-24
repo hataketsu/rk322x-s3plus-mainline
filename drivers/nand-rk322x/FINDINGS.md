@@ -49,6 +49,46 @@ ECC strength.
 - So mainline NAND on this box is **usable but not interoperable** with the vendor format;
   it's a fresh-install path, not a read-the-existing-install path.
 
+## NAND boot chain — serial evidence (SD removed)
+
+Full log: [`uboot-nand-serial.log`](uboot-nand-serial.log). The NAND install was done with
+Multitool **steP-nand**, which (by design) keeps the **vendor u-boot** because only it can
+read the rknand FTL. Booting with the SD pulled:
+
+```
+U-Boot 2017.09 (Rockchip RK322x, NAND)          vendor u-boot boots from NAND
+FLASH ID: 2c 64 ...   ECC:60   FTL version 5.0.53
+Prod: rknand   Capacity 7.4 GB   Bootdev: rknand 0   PartType: EFI
+Scanning rknand 0:1... Found U-Boot script /boot/boot.scr
+fs_devread read outside partition 11452352        <-- read past partition end
+## Executing script at 60000000
+Wrong image format for "source" command           <-- boot.scr not a valid image
+SCRIPT FAILED: continuing...  -> falls through to PXE -> dead
+```
+
+**Diagnosis.** NAND, rknand FTL and the vendor u-boot all work — u-boot even reaches the
+rootfs (`rknand 0:1`) and finds `/boot/boot.scr`. The break is at the boot script: the
+vendor **U-Boot 2017.09 cannot load the Armbian 6.6 (24.2.5) boot layout** — it reads past
+the partition and the script fails the legacy image-format check, then falls to PXE.
+
+This is *why the box doesn't boot from NAND with the 6.6 image but the legacy 4.4 image
+would*: steP-nand pairs the OLD vendor u-boot with the rootfs, and that u-boot only
+understands the older Armbian boot.scr/partition conventions. It also confirms the ECC
+finding above: the vendor FTL really uses **ECC 60** (which does not fit this chip's 744 B
+OOB under standard mainline BCH — hence mainline raw-MTD can't match it).
+
+### Paths to a bootable NAND
+
+1. **Install the legacy 4.4 image via steP-nand** — the u-boot↔boot.scr conventions match;
+   this is the vendor-supported NAND config.
+2. **Update the on-NAND u-boot** to one that reads rknand FTL *and* the current Armbian
+   boot layout (extlinux), then keep the 6.6 rootfs.
+3. **Run 6.6 from SD** (Track A wifi already works there); leave NAND alone.
+
+Mainline raw-MTD (this directory's modules) is a *separate, non-interoperable* path: it
+would require erasing the rknand FTL and reinstalling in raw-MTD layout, losing NAND boot
+via the vendor u-boot.
+
 ## Reproduce
 
 ```bash
