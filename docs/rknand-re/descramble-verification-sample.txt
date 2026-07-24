@@ -1,0 +1,35 @@
+# Descramble verification — real filesystem strings recovered from NAND
+# via mainline NFC + the RE'd vendor randomizer seed (patch 0002).
+# Source: raw read of /dev/mtd0 (4 MiB at 64 MiB offset) on the RK3229 box.
+# Without the randomizer patch the same region is pure noise (no strings).
+
+sw/res/emptypage_10x14.svg
+sw/res/nc20001.svg
+sw/res/sidebar/page
+roppanel/format_L_narrow_24x24.svg
+sw/res/wr07.svg
+xmlsecurity/res/certificate_40x56.svg
+y_16.svgPK
+chart2/res/valueaxisdirect3d_52x60.svgPK
+chart2/res/va|ueaxisdirectboth_52x60.svgPK
+chart2/res/valueaxisdirectlines_52x60.svgPK
+cha2t2/res/valueaxisdirectpoints_52x60.svgPK
+chart2/res/valueaxissmooth3d_52x60.svgPK
+chart2/res/valueaxissmoothb/th_52x60.svgPK
+chart2/res/valueaxissmoothlines_52x60.svgPK
+chart2/rgs/valueaxisstepped3d_52x60.svgPK
+chart2/res/valueaxissteppedboth_52x60.svgPK
+chart2/res/valueaxissteppedlines_52x60.svgPK
+cmd/32/about.svgPK
+cmd/32/absoluterecord.svgPK
+art.svgPK
+cmd/32/connectorcurve.svgPK
+cmd/32/connectorcurvearrowend.svgPK
+cmd/32/connectorcurvearrows.svgPK
+cmd/32/connectorcurvearrowstart.svgPK
+cmd/32/connectorcurvecircleend.svgPK
+cmd/32/connectorcurvecirclestart.svgPK
+cmd/32/connectorline.svgPK
+cmd/32/connectorlinearrowend.svgPK
+cmd/32/connectorlinearrows.svgPK
+cmd/32/connectorlinearrowstart.svgPK

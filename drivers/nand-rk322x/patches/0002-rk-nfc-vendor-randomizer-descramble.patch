@@ -1,0 +1,42 @@
+Program the vendor rknand per-page randomizer seed on read so the mainline
+Rockchip NFC driver can DESCRAMBLE vendor-written NAND pages.
+
+Mainline disables the randomizer (rk_nfc_hw_init writes 0 to randmz_off), so it
+reads vendor data pages as garbage. The vendor FTL scrambles every data page with
+a per-page seed taken from a 128-entry table indexed by (page & 0x7f) and enabled
+by OR-ing 0xc0000000 into RANDMZ_CFG. The seed table was reverse-engineered from
+the vendor 4.4 kernel (see docs/rknand-re/); this patch embeds it and programs the
+correct seed before each non-boot page transfer.
+
+VERIFIED on a Kiwibox S3 Plus (RK3229, Micron MT29F64G08CBABAWP): with this patch a
+raw read of the NAND recovers real filesystem content (LibreOffice resource paths
+"chart2/res/valueaxisdirect3d_52x60.svg", ZIP "PK" headers, etc.) from the 6.x
+rootfs that was written to NAND. Without it the same read is pure noise. (A few
+byte errors remain from the ECC geometry mismatch — 16-bit mainline vs 60-bit
+vendor — which is the next item to match.)
+
+--- a/drivers/mtd/nand/raw/rockchip-nand-controller.c
++++ b/drivers/mtd/nand/raw/rockchip-nand-controller.c
+@@ before rk_nfc_read_page_hwecc() @@
++/* rknand NFC per-page randomizer seed table, RE'd from vendor 4.4 (0xb0d6b9bc). */
++static const u16 rk_nand_randmz_seed[128] = {
++	0x576a, 0x05e8, 0x629d, 0x45a3, 0x649c, 0x4bf0, 0x2342, 0x272e,
++	... (full 128 entries, see docs/rknand-re/randomizer-seed-table.txt) ...
++	0x751f, 0x3ef8, 0x39b1, 0x4e49, 0x746b, 0x6ef6, 0x44be, 0x6db7,
++};
++
+ static int rk_nfc_read_page_hwecc(struct nand_chip *chip, u8 *buf, int oob_on,
+ 				  int page)
+ {
+@@ in rk_nfc_read_page_hwecc(), after the boot_rom_mode ECC setup @@
+ 		if (rknand->boot_ecc != ecc->strength)
+ 			rk_nfc_hw_ecc_setup(chip, rknand->boot_ecc);
+ 	}
+
++	/* Program the vendor per-page randomizer seed so the NFC hardware
++	 * descrambles vendor data (mainline leaves it off -> reads garbage). */
++	if (!boot_rom_mode)
++		writel(rk_nand_randmz_seed[page & 0x7f] | 0xc0000000,
++		       nfc->regs + nfc->cfg->randmz_off);
++
+ 	reinit_completion(&nfc->done);

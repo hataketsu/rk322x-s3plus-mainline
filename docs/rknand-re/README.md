@@ -139,6 +139,34 @@ Recovered from `nandc_init` / `nandc_set_seed` / `nandc_bch_sel` / `nandc_get_ch
 `FtlRead`/`FtlWrite`/`FtlDiscard` are the block-device entry points (dispatched via a
 function-pointer table) that the kernel's `rk_nand` block driver calls.
 
+## 5b. VERIFIED: reading vendor NAND from mainline
+
+The randomizer finding is **confirmed on hardware**. Mainline's driver already exposes the
+exact `randmz_off` we RE'd (`0x150` for v6/v8, `0x208` for v9) but *disables* the randomizer
+(`rk_nfc_hw_init` writes 0). Patch it to program the vendor seed per page
+([`../../drivers/nand-rk322x/patches/0002-*.patch`](../../drivers/nand-rk322x/patches/)):
+
+```c
+if (!boot_rom_mode)
+    writel(rk_nand_randmz_seed[page & 0x7f] | 0xc0000000,
+           nfc->regs + nfc->cfg->randmz_off);
+```
+
+A raw read of `/dev/mtd0` then recovers **real filesystem content** — e.g. LibreOffice
+resource paths and ZIP `PK` headers from the 6.x rootfs written to the NAND:
+
+```
+chart2/res/valueaxisdirect3d_52x60.svgPK
+cmd/32/connectorcurvearrowend.svgPK
+xmlsecurity/res/certificate_40x56.svg
+```
+
+(sample: [`descramble-verification-sample.txt`](descramble-verification-sample.txt)).
+Without the patch the same region is pure noise. A few bytes are still corrupted because
+the ECC geometry isn't matched yet (16-bit mainline vs 60-bit vendor) — that's the next
+item — but the **randomizer + seed table are proven correct**, and mainline can now *read*
+vendor-scrambled NAND. As far as we know this is the first time that's been demonstrated.
+
 ## 6. What a mainline port would need
 
 To **read** existing rknand data from mainline (not just drive the controller — which
