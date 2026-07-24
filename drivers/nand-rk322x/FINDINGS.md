@@ -89,6 +89,36 @@ Mainline raw-MTD (this directory's modules) is a *separate, non-interoperable* p
 would require erasing the rknand FTL and reinstalling in raw-MTD layout, losing NAND boot
 via the vendor u-boot.
 
+## Getting `/dev/mtd0` + why a backup still isn't possible from mainline
+
+With `patches/0001-rk-nfc-skip-bbtscan-for-raw-dump.patch` (set `NAND_SKIP_BBTSCAN`
+right before `nand_scan()` — the driver installs `.attach_chip` *after* the per-chip
+`nand_scan()`, so setting it in `attach_chip` never runs), probe succeeds:
+
+```
+/proc/mtd : mtd0: 200000000 00200000 "rk-nand"     (8 GiB, 2 MiB erase)
+/dev/mtd0 created
+```
+
+But the chip still can't be **read** usefully:
+
+| read mode | result |
+|---|---|
+| `nanddump --noecc` (raw) | `mtd_read` **EIO** at every offset — the driver's raw path fails on this chip |
+| `nanddump` (hw ECC) | read *succeeds* but returns **garbage** (no U-Boot/ext4/Linux strings) — mainline ECC "corrects" vendor pages to wrong bytes |
+
+So **no usable backup of the existing NAND can be taken from the running mainline
+kernel** — raw reads error out, ECC reads decode to garbage because the vendor ECC/FTL
+differs. A real, restorable backup requires the vendor stack:
+
+- **Multitool → "Backup flash"** dumps the whole NAND (idbloader + u-boot + rootfs) in an
+  rknand-aware, restorable form. This is the only reliable NAND backup path for this box.
+
+Note: the on-NAND vendor u-boot is byte-family-identical to Multitool's
+`bsp/legacy-uboot.img` (both `U-Boot 2017.09-g4fa8fb7-dirty`, FTL 5.0.53), and the newer
+`U-Boot 2022.04-armbian` in the same Multitool has **no** rknand strings — i.e. there is
+no u-boot that both reads rknand NAND *and* boots the current Armbian layout.
+
 ## Reproduce
 
 ```bash

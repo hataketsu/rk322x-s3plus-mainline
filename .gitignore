@@ -28,3 +28,5 @@ env/.cache/
 # Host junk
 .DS_Store
 *.swp
+images/*.xz
+images/multitool-*

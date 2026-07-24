@@ -1,0 +1,19 @@
+Skip the NAND bad-block-table scan in the Rockchip NFC driver so probe succeeds
+on a chip whose existing content was written by the vendor rknand FTL (mainline
+ECC can't decode it -> the BBT scan marks blocks bad and BBT creation fails with
+-ENOSPC, aborting probe). With the scan skipped, /dev/mtd0 is created so the chip
+can be inspected. Set the flag right before nand_scan(): this driver installs
+controller.ops (with .attach_chip) after the per-chip nand_scan() call, so setting
+it in attach_chip runs too late / not at all.
+
+--- a/drivers/mtd/nand/raw/rockchip-nand-controller.c
++++ b/drivers/mtd/nand/raw/rockchip-nand-controller.c
+@@ rk_nfc_nand_chip_init(), just before nand_scan() @@
+ 	mtd_set_ooblayout(mtd, &rk_nfc_ooblayout_ops);
+ 	rk_nfc_hw_init(nfc);
++	/* s3plus: vendor rknand pages fail mainline ECC; skip the bad-block table
++	 * scan/write so probe succeeds and /dev/mtd is created for raw dump. */
++	chip->options |= NAND_SKIP_BBTSCAN;
+ 	ret = nand_scan(chip, nsels);
+ 	if (ret)
+ 		return ret;
