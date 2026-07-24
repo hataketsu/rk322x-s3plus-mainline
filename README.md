@@ -37,8 +37,13 @@ Full findings + pinouts: [`docs/hardware.md`](docs/hardware.md).
 
 | Track | Goal | Feasibility | State |
 |---|---|---|---|
-| **A — WiFi** | RTL8189FS on 6.6 | **Feasible** — out-of-tree source exists | building |
+| **A — WiFi** | RTL8189ES on 6.6 | **Feasible** — out-of-tree source builds | **✅ WORKING** — `wlan0`, WPA2, DHCP, internet |
 | **B — NAND** | Boot/use NAND on 6.6 | **Hard RE** — vendor `rknand.ko` is a closed, ABI-locked blob; needs a mainline MTD driver written for the rk322x NAND controller | research |
+
+**Track A is done:** `8189es.ko` cross-built against a source KDIR pinned to the box's
+exact vermagic (`6.6.22-current-rockchip`), loads on the running 6.6 kernel, associates
+to WPA2, gets DHCP + IPv6, reaches the internet — and auto-loads on boot. Recipe in
+[`drivers/wifi-rtl8189es/`](drivers/wifi-rtl8189es/).
 
 **The honest constraint for Track B:** the 4.4 `rknand.ko` binary *cannot* be recompiled
 for 6.6 (no source, kernel ABI changed massively 4.4→6.6). The realistic path is to
