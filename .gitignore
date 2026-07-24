@@ -1,0 +1,30 @@
+# Disk images (large, redistributable from Armbian mirrors — see docs/hardware.md)
+images/*.img
+images/*.img.xz
+images/*.img.gz
+!images/.gitkeep
+
+# Reverse-engineering artifacts carved from vendor ROM (closed blobs, do NOT redistribute)
+extracted/
+!extracted/.gitkeep
+
+# Build output
+build/
+*.ko
+*.o
+*.mod
+*.mod.c
+*.mod.o
+.*.cmd
+modules.order
+Module.symvers
+*.tmp_versions/
+
+# Fetched kernel headers / toolchain caches
+env/kdir/
+env/*.deb
+env/.cache/
+
+# Host junk
+.DS_Store
+*.swp

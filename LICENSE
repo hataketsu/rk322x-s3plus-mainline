@@ -1,0 +1,17 @@
+SPDX-License-Identifier: GPL-2.0-only
+
+Copyright (C) 2026 the s3plus / rk322x contributors
+
+This project (kernel drivers, scripts, and documentation) is licensed under the
+GNU General Public License version 2 (GPL-2.0-only), consistent with the Linux
+kernel it links against.
+
+The full text of the GNU General Public License, version 2, is available at:
+    https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+
+To vendor the canonical text into this file:
+    curl -sL https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt >> LICENSE
+
+NOTE: Proprietary vendor blobs reverse-engineered for reference (anything carved
+into extracted/) are NOT covered by this license and are NOT redistributed by this
+repository. Only original, GPL-compatible code lives under drivers/.
