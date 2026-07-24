@@ -108,25 +108,39 @@ capacity), **`+9`=sectors per page** (page size in 512-B units, = `FlashGetPageS
 | [9] u8 | Manufacturer | `chip[7]` | Micron |
 | [10] u8 | FlashMask | OR(1<<CTX[0x650+i]) | die mask |
 
-## Resolution of the "60-bit doesn't fit 744 OOB" paradox
+## Resolution of the "60-bit doesn't fit 744 OOB" paradox — it's **40-bit data ECC**
 
-The FTL applies **no in-band ECC carve-out** — it treats the whole
-`sectors_per_page × 512` region as host data and delegates ECC to the hardware BCH engine
-(parity → OOB). BCH step = **1024 B user data**; steps/page = `sectors_per_page / 2`.
+The paradox dissolves: **the data area is 40-bit BCH, not 60.** The `60` (U-Boot `ECC:60`)
+is `g_idb_ecc_bits` — the **idblock / boot** ECC strength (a separate geometry the
+BootROM/miniloader uses for the first blocks). The FTL **data** area uses **40-bit BCH**.
 
-`sectors_per_page` (`chip[+9]`) is **not in the kernel image** — it is loaded at boot from
-the flash **ID block** (`FlashLoadPhyInfoInRam`, ID table @0xb1228a00). Physics fixes its
-value: 8 steps × 60-bit BCH = 8×105 = 840 B parity > 744 B OOB, so the vendor ID block sets
-`sectors_per_page ≈ 14` ⇒ **7 BCH steps of 1024 B = 7168 B usable per 8192-B page**, whose
-7×105 = **735 B parity fits the 744 B OOB**. So the *effective* geometry is:
+Proof: `nand_flash_init` (b096935c) matches the chip READ-ID against an 81-entry × 32-byte
+parameter table at `0xb1228a20`, copies the entry to `g_nand_para_info` (b122745c), and
+feeds **para byte[20] (ECC-bits)** to `nandc_bch_sel`. The entry for our chip —
+ID `2C 64 44 4B A9` (Micron MT29F64G08CBABAWP) — has **byte[20] = 0x28 = 40-bit**. Every
+8 KB Micron entry is 24/40-bit; none is 60. `g_nandc_ecc_bits`(b1374b08)=40 (data);
+`g_idb_ecc_bits`(b1374f18)=60 v6/v8, 70 v9 (boot only).
+
+On-flash per-step layout (8 steps per 8192-B page):
 
 ```
-physical page      = 8192 B main + 744 B OOB
-vendor usable data = 7168 B  (7 × 1024-B BCH steps)     <-- NOT the full 8192
-ECC                = 60-bit BCH, 105 B parity/step, 735 B/page in OOB
+[ 1024 data | 4 sys | 70 parity ]  × 8      (parity written to OOB by the HW BCH engine)
+OOB used = 8 × (4 + 70) = 592 B  ≤ 744 B  ✓   (fits, 152 B slack)
 ```
 
-**To make mainline read vendor pages:** override `ecc->size=1024`, `ecc->steps=7`,
-`ecc->strength=60`, and the OOB layout so the 7×105 B parity + 7×sys-data land where the
-vendor NFC wrote them. `writesize` stays the ONFI 8192, but only 7168 B are BCH-covered
-host data. (Exact OOB byte positions: next section, from the ECC/OOB agent.)
+BCH step = 1024 B (`nandc_xfer_start`: data DMA `sectors<<10`, sys DMA `sectors<<2` = 4 B/
+step). `ecc->bytes = ceil(40·fls(8·1024)/8) = 40·14/8 = 70`. mainline auto-selects 40 here
+(largest strength ≤ ⌊(744/8−4)·8/14⌋ = 50 that the HW supports) — so its native 8×1024 /
+40-bit / 4-sys layout already **matches the vendor data geometry**. The only thing mainline
+was missing is the **randomizer** (§3 / patch 0002).
+
+### VERIFIED — clean reads
+
+`descramble (patch 0002) + skip-bbt (patch 0001) + DT nand-ecc-strength=40, step=1024`
+reads vendor data pages with **zero ECC errors**, byte-perfect filenames, 16.6 MB/s
+(vs 1.7 MB/s and corrupt bytes at the wrong strength). Sample:
+[`clean-read-verification.txt`](clean-read-verification.txt). **Step 2 (ECC geometry) is
+done — mainline reads the vendor rknand NAND data area losslessly.**
+
+The RK **idblock/boot** blocks are the separate 60-bit (v6) / 70-bit (v9) case — handled by
+mainline's existing `boot_rom_mode` path, not this data geometry.

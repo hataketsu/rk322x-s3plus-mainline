@@ -167,24 +167,22 @@ the ECC geometry isn't matched yet (16-bit mainline vs 60-bit vendor) — that's
 item — but the **randomizer + seed table are proven correct**, and mainline can now *read*
 vendor-scrambled NAND. As far as we know this is the first time that's been demonstrated.
 
-## 5c. Step 2 — matching the 60-bit ECC geometry (open)
+## 5c. Step 2 — matching the ECC geometry: **SOLVED (data = 40-bit BCH)**
 
-Clean (ECC-corrected) reads need the vendor's exact sector geometry, and that's the catch:
+The apparent "60-bit doesn't fit 744 B OOB" problem was a red herring: **the data area is
+40-bit BCH.** The `60` is the *idblock/boot* ECC (`g_idb_ecc_bits`), a separate geometry.
+The vendor data ECC (`g_nandc_ecc_bits`) comes from the chip's entry in the parameter table
+at `0xb1228a20` — for Micron `2C 64 …` it is **0x28 = 40-bit**. Full details + struct/
+register maps: [`nand-info-struct.md`](nand-info-struct.md).
 
-- Mainline lays out 8×1024-byte steps per 8 KiB page and puts BCH parity in the 744 B OOB.
-  `ecc->bytes = ceil(strength·fls(8·1024)/8) = ceil(strength·14/8)`. 60-bit → 105 B/step ×8
-  = **840 B > 744 B OOB**, so mainline can't even configure 60-bit here (it auto-selects
-  ~40). Yet U-Boot reports `ECC:60` for the data.
-- Resolution from the RE: the vendor FTL does **not** store 8 KiB of user data per physical
-  page — `ftl_read_flash_info` / `FtlConstantsInit` populate a runtime *nand_info* struct
-  (`ctx+0x4` sectors, `+0x64c` plane count, `+0x6f8` chip-if, `+0xf41`/`+0xf44` geometry)
-  that uses a **reduced per-step payload** so 60-bit BCH parity fits. Matching it means
-  mapping that struct and reprogramming the mainline driver's `ecc->size` / `ecc->bytes` /
-  OOB layout to the vendor values — bounded RE, but not a one-liner.
+Layout: 8 steps/page × `[1024 data | 4 sys | 70 parity]` = 592 B OOB ≤ 744 ✓. This is
+mainline's **native** 8×1024 / 40-bit / 4-sys layout — the only missing piece was the
+randomizer (§3, patch 0002).
 
-Until then, reads work but with occasional uncorrected byte errors (as seen in the
-verification sample: `va|ueaxis`, `cha2t2`). The **randomizer is exact**; only ECC
-correction is approximate.
+**VERIFIED clean:** `patch 0001 + 0002 + DT nand-ecc-strength=40, step=1024` reads vendor
+data pages with **zero ECC errors**, byte-perfect filenames, 16.6 MB/s
+([`clean-read-verification.txt`](clean-read-verification.txt)). Mainline now reads the
+vendor rknand NAND **losslessly** — steps 1 (descramble) and 2 (ECC) both done.
 
 ## 6. What a mainline port would need
 

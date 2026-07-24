@@ -1,0 +1,48 @@
+# CLEAN read verification — mainline reads vendor rknand NAND with ZERO ECC errors
+# Config: descramble patch (0002) + skip-bbt (0001) + DT nand-ecc-strength=40, step=1024.
+# Data-area ECC is 40-bit BCH (RE'd; the '60' is the separate idblock/boot ECC).
+# 4 MiB read @64 MiB offset: 0 ECC errors, 16.6 MB/s, filenames byte-perfect.
+# (compare descramble-verification-sample.txt @ strength 16 which had corrupt bytes.)
+
+sw/res/emptypage_10x14.svg
+sw/res/emptypage_a_10x14.svg
+sw/res/envhc_l.svg
+sw/res/envhc_u.svg
+sw/res/envhl_l.svg
+sw/res/envvc_u.svg
+sw/res/envvl_l.svg
+sw/res/envvl_u.svg
+sw/res/nc20001.svg
+sw/res/redline_deleted.svg
+sw/res/redline_fmtcollset.svg
+sw/res/redline_formatted.svg
+sw/res/redline_inserted.svg
+sw/res/redline_tablechg.svg
+sw/res/sc20234.svg
+sw/res/sc20236.svgm
+sw/res/sc20245.svg
+sw/res/sf02.svg
+sw/res/sf03.svg
+sw/res/sf05.svg
+sw/res/sidebar/pageproppanel/Landscapecopy_24x24.svg
+sw/res/sidebar/pageproppanel/column1_24x24.svg
+sw/res/sidebar/pageproppanel/column2_24x24.svg
+sw/res/sidebar/pageproppanel/column3_24x24.svg
+sw/res/sidebar/pageproppanel/format_L_narrow_24x24.svg
+sw/res/sidebar/pageproppanel/format_L_nomal_24x24.svg
+sw/res/sidebar/pageproppanel/format_L_wide_24x24.svg
+sw/res/sidebar/pageproppanel/formatcopy_24x24.svg
+sw/res/sidebar/pageproppanel/formatmirror_24x24.svg
+sw/res/sidebar/pageproppanel/formatnarrow_24x24.svg
+sw/res/sidebar/pageproppanel/formatnormal_24x24.svg
+sw/res/sidebar/pageproppanel/formatwide_24x24.svg
+sw/res/wr07.svg
+sw/res/wr08.svg
+sw/res/wr09.svg
+vcl/res/MergeEmptyHidden.svg
+vcl/res/MergeFirstCell.svg
+vcl/res/errorbox.svg
+vcl/res/fatcross.svg
+vcl/res/infobox.svg
+---STATS---
+ecc_errors=0
