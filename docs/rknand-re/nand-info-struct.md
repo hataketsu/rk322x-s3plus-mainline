@@ -69,5 +69,64 @@ Version detection (`nandc_init`): reads MMIO ID regs `param[0x58]` (`+0x160`) an
 > 128-B/step spare (1024 B/page of spare) via DMA. Matching means replicating the v6
 > 128-B/step spare transfer + BCH status decode, not mainline's OOB-packing model.
 
-_(FTL geometry struct + exact OOB byte layout: see companion sections once agents 2/3
-land.)_
+## FTL geometry struct (CTX = static .bss @ 0xb138215c)
+
+Ghidra's many `iRamb09xxxxxx` names are literal slots holding `CTX + bias`; family-B
+accesses `base + (-0xcXX)` = `CTX + 0x1ff8 - 0xcXX`. Absolute offsets from CTX:
+
+| Offset | Field |
+|---|---|
+| `+0x004` | pages per block |
+| `+0x64c` / `+0x64d` | plane/die count |
+| `+0x650` | u8[8] per-die shift-value array (builds FlashMask) |
+| `+0x658` | u32[] per-die capacity (sectors) |
+| `+0x6f8` | chip-interface struct ptr (0x100-B records) |
+| `+0xf40` | SLC/mixed-mode enable flag |
+| `+0xf41` | **BCH strength code** (0x3c=60, 0x28=40, 0x18=24, 0x10=16) |
+| `+0xf44` | capacity/density (512-B sectors) |
+| `+0x1370` | ECC/mode = 5 (MLC) / 1 (SLC) |
+| `+0x1374` | spare/ECC region size per page (0x1100 default / 0x280 special) |
+| `+0x137c` | sectors per block |
+| `+0x137e` | **sectors per page** (used by ftl_read/write) |
+| `+0x1382` | **page data bytes = sectors_per_page << 9** |
+| `+0x1488` | ptr to per-block SLC/MLC mode bitmap (1 bit/block) |
+| `+0x14f8` | LPN exposed to block layer |
+
+Chip-interface record (via `CTX+0x6f8`): `+7`=manufacturer ID, `+8`=cell-type (==2 alt
+capacity), **`+9`=sectors per page** (page size in 512-B units, = `FlashGetPageSize`),
+`+0xd/+0xe`=block geometry, `+0x17`=multi-plane/2× density flag.
+
+### 11-byte FLASH_INFO descriptor (`ftl_read_flash_info`)
+
+| Off | Field | Source | This part |
+|---|---|---|---|
+| [0] u32 | FlashSize (512-B sectors) | `CTX+0xf44` | density |
+| [4] u16 | BlockSize (sectors/block) | `chip[9]×CTX[4]` | e.g. 4096 |
+| [6] u8 | PageSize (**sectors/page**) | `chip[9]` | ~14 (see below) |
+| [7] u8 | ECCBits | `CTX+0xf41` | **0x3c = 60** |
+| [8] u8 | AccessTime | const | 0x20 |
+| [9] u8 | Manufacturer | `chip[7]` | Micron |
+| [10] u8 | FlashMask | OR(1<<CTX[0x650+i]) | die mask |
+
+## Resolution of the "60-bit doesn't fit 744 OOB" paradox
+
+The FTL applies **no in-band ECC carve-out** — it treats the whole
+`sectors_per_page × 512` region as host data and delegates ECC to the hardware BCH engine
+(parity → OOB). BCH step = **1024 B user data**; steps/page = `sectors_per_page / 2`.
+
+`sectors_per_page` (`chip[+9]`) is **not in the kernel image** — it is loaded at boot from
+the flash **ID block** (`FlashLoadPhyInfoInRam`, ID table @0xb1228a00). Physics fixes its
+value: 8 steps × 60-bit BCH = 8×105 = 840 B parity > 744 B OOB, so the vendor ID block sets
+`sectors_per_page ≈ 14` ⇒ **7 BCH steps of 1024 B = 7168 B usable per 8192-B page**, whose
+7×105 = **735 B parity fits the 744 B OOB**. So the *effective* geometry is:
+
+```
+physical page      = 8192 B main + 744 B OOB
+vendor usable data = 7168 B  (7 × 1024-B BCH steps)     <-- NOT the full 8192
+ECC                = 60-bit BCH, 105 B parity/step, 735 B/page in OOB
+```
+
+**To make mainline read vendor pages:** override `ecc->size=1024`, `ecc->steps=7`,
+`ecc->strength=60`, and the OOB layout so the 7×105 B parity + 7×sys-data land where the
+vendor NFC wrote them. `writesize` stays the ONFI 8192, but only 7168 B are BCH-covered
+host data. (Exact OOB byte positions: next section, from the ECC/OOB agent.)
