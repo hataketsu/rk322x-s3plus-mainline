@@ -167,6 +167,25 @@ the ECC geometry isn't matched yet (16-bit mainline vs 60-bit vendor) — that's
 item — but the **randomizer + seed table are proven correct**, and mainline can now *read*
 vendor-scrambled NAND. As far as we know this is the first time that's been demonstrated.
 
+## 5c. Step 2 — matching the 60-bit ECC geometry (open)
+
+Clean (ECC-corrected) reads need the vendor's exact sector geometry, and that's the catch:
+
+- Mainline lays out 8×1024-byte steps per 8 KiB page and puts BCH parity in the 744 B OOB.
+  `ecc->bytes = ceil(strength·fls(8·1024)/8) = ceil(strength·14/8)`. 60-bit → 105 B/step ×8
+  = **840 B > 744 B OOB**, so mainline can't even configure 60-bit here (it auto-selects
+  ~40). Yet U-Boot reports `ECC:60` for the data.
+- Resolution from the RE: the vendor FTL does **not** store 8 KiB of user data per physical
+  page — `ftl_read_flash_info` / `FtlConstantsInit` populate a runtime *nand_info* struct
+  (`ctx+0x4` sectors, `+0x64c` plane count, `+0x6f8` chip-if, `+0xf41`/`+0xf44` geometry)
+  that uses a **reduced per-step payload** so 60-bit BCH parity fits. Matching it means
+  mapping that struct and reprogramming the mainline driver's `ecc->size` / `ecc->bytes` /
+  OOB layout to the vendor values — bounded RE, but not a one-liner.
+
+Until then, reads work but with occasional uncorrected byte errors (as seen in the
+verification sample: `va|ueaxis`, `cha2t2`). The **randomizer is exact**; only ECC
+correction is approximate.
+
 ## 6. What a mainline port would need
 
 To **read** existing rknand data from mainline (not just drive the controller — which
