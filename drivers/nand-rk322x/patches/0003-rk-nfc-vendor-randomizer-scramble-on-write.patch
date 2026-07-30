@@ -1,0 +1,48 @@
+Program the vendor rknand per-page randomizer seed on WRITE so pages we program
+are scrambled the same way the read path (patch 0002) expects to descramble them.
+
+Mainline leaves the randomizer off on the program path, so pages it writes are
+unscrambled and cannot be read back by rk_nfc_read_page_hwecc (which now programs
+the seed) nor by a vendor/FTL-compatible reader. This patch makes the write path
+symmetric to the read path: it programs the same per-page seed
+(rk_nand_randmz_seed[page & 0x7f] | 0xc0000000 into RANDMZ_CFG) before the NFC
+write transfer, for every non-boot page. The 40-bit BCH parity is still generated
+by the controller hardware, unchanged.
+
+Because rk_nand_randmz_seed[] is defined further down (just before the read path),
+a forward declaration is added so the earlier write function can reference it.
+
+Round-trip verified with tools/nand-write-test.py: erase a verified-free block,
+write a known pattern through this path, read it back through patch 0002 — the
+bytes match. Safe to test on this box because it boots from SD independently, so a
+bad NAND write cannot brick it.
+
+--- a/drivers/mtd/nand/raw/rockchip-nand-controller.c
++++ b/drivers/mtd/nand/raw/rockchip-nand-controller.c
+@@ before rk_nfc_write_page_hwecc() @@
++/* Defined below; used by both the write (scramble) and read (descramble) paths. */
++static const u16 rk_nand_randmz_seed[128];
++
+ static int rk_nfc_write_page_hwecc(struct nand_chip *chip, const u8 *buf,
+ 				   int oob_on, int page)
+ {
+@@ in rk_nfc_write_page_hwecc(), after the oob DMA mapping, before xfer_start @@
+ 	dma_oob = dma_map_single(nfc->dev, nfc->oob_buf,
+ 				 ecc->steps * oob_step,
+ 				 DMA_TO_DEVICE);
+
++	/* s3plus: program the RE'd vendor per-page randomizer seed so the NFC
++	 * hardware scrambles data pages on write, symmetric to the read path
++	 * (mainline leaves it off). Same seed table indexed by page & 0x7f,
++	 * enabled by OR'ing 0xc0000000 into RANDMZ_CFG. This makes pages we
++	 * write vendor-format readable by rk_nfc_read_page_hwecc and, later, a
++	 * vendor/FTL-compatible reader. */
++	if (!boot_rom_mode)
++		writel(rk_nand_randmz_seed[page & 0x7f] | 0xc0000000,
++		       nfc->regs + nfc->cfg->randmz_off);
++
+ 	reinit_completion(&nfc->done);
+ 	writel(INT_DMA, nfc->regs + nfc->cfg->int_en_off);
+
+ 	rk_nfc_xfer_start(nfc, NFC_WRITE, ecc->steps, dma_data,
+ 			  dma_oob);
