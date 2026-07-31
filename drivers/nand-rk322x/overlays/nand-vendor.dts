@@ -1,0 +1,15 @@
+/dts-v1/;
+/plugin/;
+/ {
+  fragment@0 {
+    target-path = "/nand-controller@30030000";
+    __overlay__ {
+      compatible = "rockchip,rk-nandc";
+      clock-names = "clk_nandc", "hclk_nandc";
+      nandc_id = <0>;
+      status = "okay";
+      pinctrl-names = "default";
+      pinctrl-0 = < 0xa7 0xab 0xa8 0xa2 0xac 0xaa 0xa6 0xa9 0xad >;
+    };
+  };
+};

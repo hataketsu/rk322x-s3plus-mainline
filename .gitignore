@@ -30,3 +30,7 @@ env/.cache/
 *.swp
 images/*.xz
 images/multitool-*
+uart.log
+
+# Kbuild dependency files
+*.o.d
