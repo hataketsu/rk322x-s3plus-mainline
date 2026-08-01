@@ -1,0 +1,27 @@
+--- /home/hataketsu/Projects/luckfox/sysdrv/source/uboot/u-boot/include/configs/evb_rk3229.h.orig	2026-08-01 08:50:53.956893266 +0700
++++ /home/hataketsu/Projects/luckfox/sysdrv/source/uboot/u-boot/include/configs/evb_rk3229.h	2026-08-01 09:06:56.181194872 +0700
+@@ -21,7 +21,23 @@
+ #ifndef CONFIG_SPL_BUILD
+ 
+ #undef CONFIG_BOOTCOMMAND
+-#define CONFIG_BOOTCOMMAND RKIMG_BOOTCOMMAND
++/*
++ * s3plus: try our extlinux setup on the NAND boot partition first.
++ *
++ * distro_bootcmd cannot find it on its own: scan_dev_for_boot_part starts with
++ * "part list ${devtype} ${devnum} -bootable devplist" and falls back to
++ * scanning only partition 1 when nothing is marked bootable -- and
++ * disk/part_rkparm.c hardcodes info->bootable = 0 for every rkparm partition.
++ * On rknand that means it only ever probed partition 1, the raw uboot
++ * partition, which has no filesystem, and then fell through to usb/pxe.
++ *
++ * sysboot returns on failure, so the stock Rockchip sequence still runs
++ * afterwards -- including the mmc targets, which keep the SD card working as a
++ * recovery path.
++ */
++#define CONFIG_BOOTCOMMAND \
++	"sysboot rknand 0:3 any ${scriptaddr} /extlinux/extlinux.conf; " \
++	RKIMG_BOOTCOMMAND
+ #endif
+ 
+ #endif

@@ -34,3 +34,4 @@ uart.log
 
 # Kbuild dependency files
 *.o.d
+uart-15m.log
