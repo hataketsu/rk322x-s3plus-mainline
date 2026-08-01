@@ -1,93 +1,91 @@
-# Kiwibox S3 Plus (RK322x) — NAND boot & WiFi driver port to mainline Armbian
+# Kiwibox S3 Plus (RK322x) — mainline Armbian from onboard NAND
 
-Bringing the **onboard NAND** and **RTL8189FS WiFi** of a Rockchip RK322x TV box
-(Kiwibox S3 Plus, SoC RK3229) back to life on the **current Armbian kernel (6.6.x)**,
-where the vendor's closed 4.4 drivers no longer apply.
+A Rockchip RK3229 TV box whose NAND and WiFi only ever worked on the vendor's
+closed 4.4 kernel now runs **Armbian with kernel 6.6 from its own NAND, with no
+SD card**, WiFi included.
 
-> Status: **early** — environment + reverse-engineering scaffold. WiFi track is close
-> to a working module; NAND track is a research/porting effort. See the status matrix.
+```
+findmnt /                 /dev/rknand0p4
+lsblk                     rknand0 -> p1 p2 p3 p4        (no mmcblk0)
+uname -r                  6.6.22-current-rockchip
+systemctl is-system-running   running
+end0 / wlan0              both up
+```
 
-## Why this exists
+Both blockers are closed:
 
-The vendor only ever shipped working NAND + WiFi on the **legacy 4.4 kernel** (a closed
-`rknand` blob + an out-of-tree `8189fs` driver). Armbian's **current 6.6 image boots
-fine from SD card but:**
+| Track | Goal | State |
+|---|---|---|
+| **A — WiFi** | RTL8189ES (SDIO `024C:8179`) on 6.6 | **working** — `wlan0`, WPA2, DHCP, auto-loads |
+| **B — NAND** | boot and run 6.6 from onboard NAND | **working** — full chain, rootfs on NAND |
 
-- **no `wlan0`** — RTL8189FS (SDIO `024C:8179`) has no in-tree SDIO driver, and
-- **cannot boot from / use onboard NAND** — the `nand-controller@30030000` has no
-  mainline MTD driver bound (`/proc/mtd` empty, no `/dev/mtd*`).
+## How it boots
 
-This repo reverse-engineers the vendor 4.4 ROM and the Multitool boot chain to close
-both gaps on 6.6.
+Mainline U-Boot cannot start this board from NAND: its TPL/SPL has no rk322x NAND
+support, and the flash is managed by Rockchip's closed FTL rather than raw
+MTD/UBI. So the first two stages stay vendor, and everything above them is ours:
 
-## Hardware (this unit)
+```
+BootROM
+  → idblock            vendor DDR init + miniloader, in reserved physical blocks
+  → miniloader         reads the FTL, finds partitions via `parameter`
+  → trust.img + uboot.img
+  → vendor U-Boot 2017.09
+  → extlinux           /extlinux/extlinux.conf on an ext4 partition of the FTL
+  → mainline 6.6 kernel + rk322x-box DTB + initrd carrying rknand.ko
+  → rootfs on NAND
+```
+
+The same closed FTL blob is linked into both the U-Boot stage and our kernel
+module, which is what lets U-Boot and Linux agree on the layout.
+
+## Start here
+
+- **[docs/journey/](docs/journey/)** — the write-up series: how the port was done,
+  what went wrong, and the lessons. Read this to reproduce or to port to another
+  RK322x box.
+- **[docs/nand-boot.md](docs/nand-boot.md)** — the boot chain as a procedure:
+  layout, how to build each piece, how to write it, what a good boot looks like.
+- **[docs/rknand-re/](docs/rknand-re/)** — the reverse engineering: NFC register
+  map, BCH ECC scheme, the data-randomizer seed table, OOB format, L2P algorithm.
+- **[docs/hardware.md](docs/hardware.md)** — board, pinout, serial console.
+
+## Hardware
 
 | | |
 |---|---|
 | Board | `rk322x-box` (Generic RK322x TV Box), Armbian `LINUXFAMILY=rockchip` |
-| SoC | Rockchip RK3229 (Cortex-A7 ×4, armv7l), 2 GB DDR3 |
-| WiFi | Realtek **RTL8189FS**, SDIO id `024C:8179` on `mmc1` (non-removable) |
-| NAND | Rockchip NAND, controller `nand-controller@30030000`, `rknand` v1.2 under 4.4 |
-| Console | UART2, `ttyS2` **115200 8N1** |
-| Running now | Armbian 24.2.5, kernel `6.6.22-current-rockchip`, booted from SD |
-
-Full findings + pinouts: [`docs/hardware.md`](docs/hardware.md).
-
-## Status matrix
-
-| Track | Goal | Feasibility | State |
-|---|---|---|---|
-| **A — WiFi** | RTL8189ES on 6.6 | **Feasible** — out-of-tree source builds | **✅ WORKING** — `wlan0`, WPA2, DHCP, internet |
-| **B — NAND** | Boot/use NAND on 6.6 | Mainline now **reads the vendor rknand data losslessly** (descramble + 40-bit ECC RE'd & verified, 0 errors). Remaining: FTL L2P → mount → boot | reading ✓ |
-
-**Track B update:** the box's `nand-controller@30030000` is `compatible =
-"rockchip,rk3228-nfc", "rockchip,rk2928-nfc"`, which mainline
-`rockchip-nand-controller.c` already matches. The only blockers are config: Armbian ships
-`# CONFIG_MTD is not set` and the DT node is `status = disabled`. So Track B = enable MTD
-+ Rockchip NFC + flip the DT node, then steP-nand for boot — **not** a driver-writing or
-reverse-engineering effort. Details in [`drivers/nand-rk322x/`](drivers/nand-rk322x/).
-Booting current from NAND is a separate, unsolved problem — see
-[`drivers/nand-rk322x/FINDINGS.md`](drivers/nand-rk322x/FINDINGS.md) and the
-reverse-engineering of the closed vendor FTL in [`docs/rknand-re/`](docs/rknand-re/)
-(NFC register map, BCH ECC scheme, the data-randomizer descrambler key, FTL layout).
-
-**Track A is done:** `8189es.ko` cross-built against a source KDIR pinned to the box's
-exact vermagic (`6.6.22-current-rockchip`), loads on the running 6.6 kernel, associates
-to WPA2, gets DHCP + IPv6, reaches the internet — and auto-loads on boot. Recipe in
-[`drivers/wifi-rtl8189es/`](drivers/wifi-rtl8189es/).
-
-**The honest constraint for Track B:** the 4.4 `rknand.ko` binary *cannot* be recompiled
-for 6.6 (no source, kernel ABI changed massively 4.4→6.6). The realistic path is to
-**write a mainline MTD driver** for the `nand-controller@30030000`, using the vendor
-blob's register access (via disassembly) and the Multitool steP-nand chain as reference.
-See [`docs/nand-boot.md`](docs/nand-boot.md).
+| SoC | Rockchip RK3229 (Cortex-A7 ×4, armv7l), 2 GB DDR3, ARM clock 1.2 GHz |
+| NAND | Micron MT29F64G08CBABAWP, 8 GB MLC — page 8192 B, OOB 744 B, erase 2 MiB |
+| NAND controller | `nand-controller@30030000`, Rockchip NFC v6/v8 |
+| WiFi | Realtek RTL8189ES, SDIO `024C:8179` on `mmc1` (non-removable) |
+| Console | UART2, `ttyS2`, **115200 8N1** |
 
 ## Layout
 
 ```
-docs/                 hardware notes, NAND boot chain, RE methodology
-env/                  reproducible cross-build (Docker) — pinned to kernel 6.6.22
-scripts/              ROM extraction, SD flashing, box SSH helper
-drivers/wifi-8189fs/  Track A — RTL8189FS module build
-drivers/nand-rk322x/  Track B — mainline NAND MTD driver (WIP)
-extracted/            (gitignored) blobs carved from vendor 4.4 ROM
-images/               (gitignored) Armbian .img.xz — fetch from mirror
+docs/                             hardware, boot chain, RE notes, write-up series
+docs/journey/                     how it was done, pitfalls, lessons
+docs/rknand-re/                   reverse engineering of the vendor FTL
+drivers/wifi-rtl8189es/           Track A — RTL8189ES module build
+drivers/nand-rk322x/rknand-port/  vendor rk_nand FTL driver forward-ported to 6.6
+drivers/nand-rk322x/overlays/     device-tree overlays (mainline MTD / vendor FTL)
+drivers/nand-rk322x/uboot/        patches for the vendor U-Boot 2017.09
+tools/                            mk-idblock.py, mk-rkparam.py, diagnostics
+env/                              reproducible cross-build (Docker), pinned to 6.6.22
+extracted/                        (gitignored) blobs carved from the vendor 4.4 ROM
 ```
 
-## Quick start
+## Recovery
 
-```bash
-# 1. bring up the pinned cross-build toolchain (kernel 6.6.22 headers)
-make -C env toolchain
-
-# 2. carve the vendor 4.4 ROM for reference blobs (rknand.ko, 8189fs firmware)
-./scripts/extract-rom.sh images/Armbian_21.05.1_Rk322x-box_buster_legacy_4.4.194.img.xz
-
-# 3. build the WiFi module
-make -C drivers/wifi-8189fs
-```
+Nothing here is a one-way door, provided you keep one thing in mind: **once a
+valid idblock is on NAND the BootROM boots NAND and ignores the SD card**. To get
+back to an SD boot, **short NAND pins 29+30 during power-on** — the BootROM then
+fails to read the flash and falls through to the card. The board also has a
+reset/recovery button, and a serial console on `ttyS2` at 115200.
 
 ## License
 
-Kernel drivers: **GPL-2.0**. Vendor blobs under `extracted/` are **not** redistributed.
-See [`LICENSE`](LICENSE).
+Kernel and U-Boot changes: **GPL-2.0**. The Rockchip FTL blobs are vendor-shipped
+assembly redistributed from the public BSP; nothing under `extracted/` (carved
+from the vendor ROM) is redistributed. See [`LICENSE`](LICENSE).
