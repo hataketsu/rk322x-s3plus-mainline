@@ -9,12 +9,27 @@ so **only the driver module is missing** — no controller/pinmux/pwrseq work ne
 
 ## Source
 
-`src/` is a git submodule → **jwrdegoede/rtl8189ES_linux** (same tree used for the
-author's mainline S805 8189ES bring-up; maintained for 6.x):
+`src/` is a **git submodule**, not vendored — the tree is ~33 MB and upstream is
+maintained, so the repo pins a commit instead of copying it.
+
+| | |
+|---|---|
+| Upstream | <https://github.com/jwrdegoede/rtl8189ES_linux> |
+| Pinned commit | `2d9a8afb5d12de1cfc4ab5ad3d1a61e1937629bd` |
+| Driver version | `v5.8.9_35085.20190919` (`include/rtw_version.h`) |
+
+Hans de Goede's fork is the one that tracks current kernels; the Realtek original
+does not build on 6.x. It is also the same tree used for the author's mainline
+S805 8189ES bring-up, so the build recipe carried over.
 
 ```bash
+git clone --recursive https://github.com/hataketsu/rk322x-s3plus-mainline
+# or, in an existing clone:
 git submodule update --init drivers/wifi-rtl8189es/src
 ```
+
+To move to a different upstream revision, check it out inside `src/` and commit
+the resulting gitlink — that is the only thing this repo stores for it.
 
 Vendor reference build + firmware (carved from the 4.4 ROM, for comparison only):
 
